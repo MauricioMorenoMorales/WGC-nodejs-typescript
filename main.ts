@@ -1,41 +1,62 @@
 import * as fs from 'fs';
-import { Readable } from 'stream';
+import * as util from 'util';
+import { Writable } from 'stream';
 
-const stream = fs.createReadStream('./readedFile.txt', { encoding: 'utf-8' });
+const stream = fs.createWriteStream('./createdFile.txt');
 
-// Se ejecutara solo uno de estos, si el primero no se ejecuta, el que está dentro del timeout lo hara
-stream.on('data', chunk => console.log('New chunk of data:', chunk));
+stream.write('Hello world', () => console.log('File created!'));
 
-setTimeout(() => {
-	stream.on('data', chunk => console.log('Second chunk of data:', chunk));
-}, 2000);
+stream.on('finish', () => console.log('All the data is trasmitted'));
 
-const stream2 = new Readable();
+stream.write('Hello ');
+stream.write('World!');
 
-stream2.push('Hello ');
-stream2.push('World! ');
-stream2.push(null);
-//stream2.push('World! '); retorna un error ya que el nul termina el stream
+const readable = fs.createReadStream('./readedFile.txt');
+const writable = fs.createWriteStream('./file1.txt');
 
-stream2.on('data', chunk => console.log(chunk.toString()));
+readable.pipe(writable);
 
-//! ---
-const stream3 = new Readable();
+readable.on('data', chunk => writable.write(chunk));
 
-const read = stream3.read.bind(stream3);
-stream3.read = function () {
-	console.log('read() called');
-	return read();
+const writable2 = new Writable();
+
+writable2._write = function (chunk, encoding, next) {
+	console.log(chunk.toString());
+	next();
 };
 
-stream3.push('Hello ');
-stream3.push('World! ');
-stream3.push(null);
+writable.write('Hello world!');
 
-stream.on('readable', () => {
-	let data;
-	while (null !== (data = stream.read()))
-		console.log('Received', data.toString());
+const writeFile = util.promisify(fs.writeFile);
+
+class WritableFileStream extends Writable {
+	public path: string;
+	constructor(path: string) {
+		super();
+		this.path = path;
+	}
+
+	_write(chunk: any, encoding: string, next: (error?: Error) => void) {
+		writeFile(this.path, chunk)
+			.then(() => next())
+			.catch(console.log);
+	}
+}
+
+const writable3 = new WritableFileStream('./file2.txt');
+
+readable.pipe(writable3);
+
+//Standard input
+
+let a: any;
+let b: any;
+
+process.stdin.on('data', data => {
+	if (a === undefined) a = Number(data.toString());
+	else if (b === undefined) {
+		b = Number(data.toString());
+		console.log(`${a} + ${b} = ${a + b}`);
+		process.stdin.pause();
+	}
 });
-
-stream3.on('data', chunk => console.log(chunk));
